@@ -1,9 +1,14 @@
 package net.kenji.icarus_additions.client;
 
+import dev.cammiescorner.icarus.client.models.DiscordsWingsModel;
+import dev.cammiescorner.icarus.client.models.FeatheredWingsModel;
+import dev.cammiescorner.icarus.client.models.FlandresWingsModel;
+import dev.cammiescorner.icarus.client.models.LeatherWingsModel;
 import dev.cammiescorner.icarus.client.models.WingEntityModel;
 import dev.cammiescorner.icarus.client.models.ZanzasWingsModel;
-import net.kenji.icarus_additions.IcarusWingFlex;
+import net.kenji.icarus_additions.IcarusAdditions;
 import net.kenji.icarus_additions.WingFlexConfig;
+import net.kenji.icarus_additions.hover.HoverPhase;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
@@ -56,7 +61,7 @@ public final class WingFlexAnimator {
     public static void beforeSetup(WingEntityModel<?> model) {
         if (!loggedHook) {
             loggedHook = true;
-            IcarusWingFlex.LOGGER.info("[Icarus Wing Flex] Hooked into Icarus wing rendering.");
+            IcarusAdditions.LOGGER.info("[Icarus Additions] Hooked into Icarus wing rendering.");
         }
         Joint[] joints = JOINTS.computeIfAbsent(model, WingFlexAnimator::resolveJoints);
         if (joints == null) return;
@@ -69,9 +74,19 @@ public final class WingFlexAnimator {
 
     /** Called right after Icarus' setupAnim, which has already positioned the root bones for this frame. */
     public static void afterSetup(WingEntityModel<?> model, LivingEntity entity, float ageInTicks) {
+        FlexState state = STATES.computeIfAbsent(entity, e -> new FlexState());
+
+        // Hover: spread the wings like in flight (Icarus thinks we're just standing/crouching) with a hovering flap.
+        // Blended in/out so the wings open and fold smoothly.
+        // Braking: held open like a glide, no flapping. Hovering: the flap fades in.
+        HoverPhase phase = ClientHoverHandler.getPhase(entity);
+        float hoverBlend = state.updateHoverBlend(ageInTicks, phase != HoverPhase.NONE, phase == HoverPhase.HOVERING);
+        if (hoverBlend > 0.0F) {
+            applyHoverPose(model, ageInTicks, hoverBlend, state.hoverFlap);
+        }
+
         // Always track the flap (the dip uses it too, even on wings with no elbow like Light wings)
         float rootX = model.leftWing.xRot; // right wing mirrors the same xRot
-        FlexState state = STATES.computeIfAbsent(entity, e -> new FlexState());
         state.update(rootX, ageInTicks, entity.isFallFlying(),
                 WingFlexConfig.UP_BEND_AMOUNT.get().floatValue(),
                 WingFlexConfig.DOWN_BEND_AMOUNT.get().floatValue(),
@@ -85,6 +100,47 @@ public final class WingFlexAnimator {
         float bend = state.bend((float) Math.toRadians(WingFlexConfig.MAX_BEND_DEGREES.get()));
         if (Math.abs(bend) < 1.0E-4F) return;
         for (Joint j : joints) applyBend(j, bend);
+    }
+
+    /** Icarus' fully-spread flying root pose (its FLYING branch with no downward velocity). */
+    private static final float HOVER_ROOT_X = 0.35F;
+    private static final float HOVER_ROOT_Z = -1.25F;
+    /** Hover flap: a bit slower and shallower than Icarus' powered flap (0.4 rad/tick, 1.0 rad). */
+    private static final float HOVER_FLAP_SPEED = 0.35F;
+    private static final float HOVER_FLAP_SIZE = 0.7F;
+
+    private static void applyHoverPose(WingEntityModel<?> model, float ageInTicks, float blend, float flap) {
+        float targetX = HOVER_ROOT_X + Mth.sin(ageInTicks * HOVER_FLAP_SPEED) * HOVER_FLAP_SIZE * flap;
+        ModelPart left = model.leftWing;
+        left.xRot = Mth.lerp(blend, left.xRot, targetX);
+        left.yRot = Mth.lerp(blend, left.yRot, 0.0F);
+        left.zRot = Mth.lerp(blend, left.zRot, HOVER_ROOT_Z);
+        // Mirror exactly like Icarus does
+        ModelPart right = model.rightWing;
+        right.xRot = left.xRot;
+        right.yRot = -left.yRot;
+        right.zRot = -left.zRot;
+
+        // These models also switch their elbow angle by state (folded when idle, open when flying); open it
+        float elbowFlyingX = elbowFlyingX(model);
+        if (!Float.isNaN(elbowFlyingX)) {
+            try {
+                ModelPart l03 = left.getChild("leftWing01").getChild("leftWing02").getChild("leftWing03");
+                ModelPart r03 = right.getChild("rightWing01").getChild("rightWing02").getChild("rightWing03");
+                l03.xRot = Mth.lerp(blend, l03.xRot, elbowFlyingX);
+                r03.xRot = l03.xRot;
+            } catch (NoSuchElementException ignored) {
+            }
+        }
+    }
+
+    /** The FLYING-state elbow xRot each model sets in its own setupAnim, or NaN if the model doesn't do that. */
+    private static float elbowFlyingX(WingEntityModel<?> model) {
+        if (model instanceof FlandresWingsModel) return (float) Math.toRadians(45.0D);
+        if (model instanceof FeatheredWingsModel || model instanceof LeatherWingsModel || model instanceof DiscordsWingsModel) {
+            return (float) Math.toRadians(-32.5D);
+        }
+        return Float.NaN;
     }
 
     /**
@@ -142,7 +198,7 @@ public final class WingFlexAnimator {
         Joint right = resolve(model.rightWing, rightPath);
         if (left == null || right == null) {
             // e.g. Light wings: blades are siblings, there's no elbow to bend
-            IcarusWingFlex.LOGGER.debug("[Icarus Wing Flex] No elbow found for {}, leaving it stiff", model.getClass().getSimpleName());
+            IcarusAdditions.LOGGER.debug("[Icarus Additions] No elbow found for {}, leaving it stiff", model.getClass().getSimpleName());
             return null;
         }
         return new Joint[]{left, right};
@@ -183,6 +239,30 @@ public final class WingFlexAnimator {
         private float bend;
         private float amplitude;
         float dip;
+
+        /** Ticks for the wings to open/fold when entering/leaving a hover. */
+        private static final float HOVER_BLEND_TIME = 3.0F;
+        /** Ticks for the hovering flap to fade in once braking is done. */
+        private static final float HOVER_FLAP_FADE_TIME = 4.0F;
+        private float hoverBlend;
+        float hoverFlap;
+        private float hoverTime = Float.NaN;
+
+        float updateHoverBlend(float time, boolean spread, boolean flapping) {
+            float dt = Float.isNaN(hoverTime) ? 0.0F : time - hoverTime;
+            hoverTime = time;
+            float target = spread ? 1.0F : 0.0F;
+            float flapTarget = flapping ? 1.0F : 0.0F;
+            if (dt < 0.0F || dt > 20.0F) {
+                hoverBlend = target; // long gap (wasn't rendered), just snap
+                hoverFlap = flapTarget;
+            } else if (dt > 0.0F) {
+                hoverBlend += (target - hoverBlend) * (1.0F - (float) Math.exp(-dt / HOVER_BLEND_TIME));
+                hoverFlap += (flapTarget - hoverFlap) * (1.0F - (float) Math.exp(-dt / HOVER_FLAP_FADE_TIME));
+            }
+            if (!spread && hoverBlend < 0.001F) hoverBlend = 0.0F;
+            return hoverBlend;
+        }
 
         void update(float rootX, float time, boolean flying, float upAmount, float downAmount, float lag) {
             float dt = time - lastTime;

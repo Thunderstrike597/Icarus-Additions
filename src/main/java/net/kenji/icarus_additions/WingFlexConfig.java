@@ -16,6 +16,9 @@ public final class WingFlexConfig {
     public static final ForgeConfigSpec.DoubleValue DIP_DEPTH;
     public static final ForgeConfigSpec.BooleanValue CAMERA_FOLLOWS_DIP;
 
+    public static final ForgeConfigSpec.BooleanValue HOVER_ENABLED;
+    public static final ForgeConfigSpec.DoubleValue HOVER_SLOW_DOWN_INTENSITY;
+
     static {
         ForgeConfigSpec.Builder b = new ForgeConfigSpec.Builder();
         b.push("wing_flex");
@@ -63,6 +66,22 @@ public final class WingFlexConfig {
                         "false = the third person camera stays where it would be without the dip, so you can see the",
                         "player bob up and down on screen. true = the camera moves down with the player.")
                 .define("cameraFollowsDip", false);
+
+        b.pop();
+
+        b.push("hover");
+
+        HOVER_ENABLED = b.comment(
+                        "Crouch while flying with Icarus wings to stop and hover: the player turns upright with wings",
+                        "spread, brakes quickly, then hangs in the air with hidden Slow Falling until crouch is released.",
+                        "Crouching on the ground or while falling without having been flying does nothing.")
+                .define("enabled", true);
+
+        HOVER_SLOW_DOWN_INTENSITY = b.comment(
+                        "How hard the player brakes after crouching mid-flight, before settling into the hover.",
+                        "1.0 = about 2 seconds from fast flight, 2.0 = about 1 second, 4.0 = about half a second.",
+                        "Lower values coast further.")
+                .defineInRange("slowDownIntensity", 1.5, 0.1, 10.0);
 
         b.pop();
         SPEC = b.build();

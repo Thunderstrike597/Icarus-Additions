@@ -6,7 +6,8 @@
   "refmap": "icarus_additions.refmap.json",
   "client": [
     "WingsLayerMixin",
-    "CameraMixin"
+    "CameraMixin",
+    "PlayerPatchMixin"
   ],
   "injectors": {
     "defaultRequire": 0

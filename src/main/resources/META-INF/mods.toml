@@ -28,4 +28,4 @@ description='''${mod_description}'''
     mandatory=true
     versionRange="[0,)"
     ordering="AFTER"
-    side="CLIENT"
+    side="BOTH"
