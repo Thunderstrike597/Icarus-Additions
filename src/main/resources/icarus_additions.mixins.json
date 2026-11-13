@@ -1,0 +1,14 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "net.kenji.icarus_additions.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "icarus_additions.refmap.json",
+  "client": [
+    "WingsLayerMixin",
+    "CameraMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 0
+  }
+}
