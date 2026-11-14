@@ -200,7 +200,13 @@ public final class ClientHoverHandler {
     public static boolean isHovering(Entity entity) {
         if (!(entity instanceof Player player)) return false;
         HoverState s = STATES.get(player);
-        return s != null && s.phase != HoverPhase.NONE;
+        return s != null && s.phase == HoverPhase.HOVERING;
+    }
+
+    public static boolean isBreaking(Entity entity){
+        if (!(entity instanceof Player player)) return false;
+        HoverState s = STATES.get(player);
+        return s != null && s.phase == HoverPhase.BRAKING;
     }
 
     /**

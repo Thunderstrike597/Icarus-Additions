@@ -32,7 +32,8 @@ public final class WingDipHandler {
     public static void onPreHighest(RenderLivingEvent.Pre<?, ?> event) {
         LivingEntity entity = event.getEntity();
         float partialTick = event.getPartialTick();
-        float dip = WingFlexAnimator.getDip(entity, partialTick);
+        // Gliding dip (<= 0) and hover pop (>= 0); only one is ever active, but they fade independently
+        float dip = WingFlexAnimator.getDip(entity, partialTick) + WingFlexAnimator.getPop(entity, partialTick);
         float lean = ClientHoverHandler.getUprightLean(entity, partialTick);
         if (dip == 0.0F && lean == 0.0F) return;
 

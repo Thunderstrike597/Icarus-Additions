@@ -87,7 +87,7 @@ public final class WingFlexAnimator {
 
         // Always track the flap (the dip uses it too, even on wings with no elbow like Light wings)
         float rootX = model.leftWing.xRot; // right wing mirrors the same xRot
-        state.update(rootX, ageInTicks, entity.isFallFlying(),
+        state.update(rootX, ageInTicks, entity.isFallFlying(), phase == HoverPhase.HOVERING,
                 WingFlexConfig.UP_BEND_AMOUNT.get().floatValue(),
                 WingFlexConfig.DOWN_BEND_AMOUNT.get().floatValue(),
                 WingFlexConfig.FOLLOW_LAG.get().floatValue());
@@ -121,6 +121,12 @@ public final class WingFlexAnimator {
         right.yRot = -left.yRot;
         right.zRot = -left.zRot;
 
+        // Icarus roots the wings fairly low on the back (tuned for the horizontal flying pose). Upright, that reads
+        // as mid/lower back, so lift them while braking/hovering. Model space is y-down: subtracting moves up.
+        float lift = WingFlexConfig.HOVER_WING_LIFT.get().floatValue();
+        left.y = Mth.lerp(blend, left.y, left.y - lift);
+        right.y = left.y;
+
         // These models also switch their elbow angle by state (folded when idle, open when flying); open it
         float elbowFlyingX = elbowFlyingX(model);
         if (!Float.isNaN(elbowFlyingX)) {
@@ -148,12 +154,23 @@ public final class WingFlexAnimator {
      * 0 when not flapping, not wearing wings, or when the wings weren't rendered recently.
      */
     public static float getDip(Entity entity, float partialTick) {
-        if (!(entity instanceof LivingEntity living)) return 0.0F;
+        FlexState state = freshState(entity, partialTick);
+        return state == null ? 0.0F : state.dip;
+    }
+
+    /** How far (in blocks, >= 0) this entity's model should currently be lifted by its hover flapping. */
+    public static float getPop(Entity entity, float partialTick) {
+        FlexState state = freshState(entity, partialTick);
+        return state == null ? 0.0F : state.pop;
+    }
+
+    private static FlexState freshState(Entity entity, float partialTick) {
+        if (!(entity instanceof LivingEntity living)) return null;
         FlexState state = STATES.get(living);
-        if (state == null || !state.initialised) return 0.0F;
-        // Wings weren't rendered recently (unequipped, first person, culled...): don't leave a stale dip behind
-        if (living.tickCount + partialTick - state.lastTime > 3.0F) return 0.0F;
-        return state.dip;
+        if (state == null || !state.initialised) return null;
+        // Wings weren't rendered recently (unequipped, first person, culled...): don't leave a stale offset behind
+        if (living.tickCount + partialTick - state.lastTime > 3.0F) return null;
+        return state;
     }
 
     private static void applyBend(Joint j, float bend) {
@@ -239,6 +256,8 @@ public final class WingFlexAnimator {
         private float bend;
         private float amplitude;
         float dip;
+        /** Hover pop: >= 0, the player rises on each downstroke while hovering. */
+        float pop;
 
         /** Ticks for the wings to open/fold when entering/leaving a hover. */
         private static final float HOVER_BLEND_TIME = 3.0F;
@@ -264,7 +283,7 @@ public final class WingFlexAnimator {
             return hoverBlend;
         }
 
-        void update(float rootX, float time, boolean flying, float upAmount, float downAmount, float lag) {
+        void update(float rootX, float time, boolean flying, boolean hovering, float upAmount, float downAmount, float lag) {
             float dt = time - lastTime;
             if (!initialised || dt < 0.0F || dt > 20.0F) {
                 initialised = true;
@@ -273,6 +292,7 @@ public final class WingFlexAnimator {
                 bend = 0.0F;
                 amplitude = 0.0F;
                 dip = 0.0F;
+                pop = 0.0F;
                 return;
             }
             lastTime = time;
@@ -295,15 +315,23 @@ public final class WingFlexAnimator {
             // Envelope of the flap amplitude: tells real flapping apart from the small gliding sway
             amplitude = Math.max(Math.abs(flap), amplitude * (float) Math.exp(-dt / ENVELOPE_DECAY));
             float targetDip = 0.0F;
-            if (flying && WingFlexConfig.DIP_ENABLED.get()) {
-                float flapping = Mth.clamp((amplitude - FLAP_AMP_MIN) / (FLAP_AMP_FULL - FLAP_AMP_MIN), 0.0F, 1.0F);
-                if (flapping > 0.0F) {
-                    // 0 = wings at the bottom of the stroke (normal height), 1 = wings at the top (lowest point)
-                    float strokeHeight = Mth.clamp((flap / amplitude + 1.0F) * 0.5F, 0.0F, 1.0F);
+            float targetPop = 0.0F;
+            float flapping = Mth.clamp((amplitude - FLAP_AMP_MIN) / (FLAP_AMP_FULL - FLAP_AMP_MIN), 0.0F, 1.0F);
+            if (flapping > 0.0F) {
+                // 0 = wings at the bottom of the stroke, 1 = wings at the top
+                float strokeHeight = Mth.clamp((flap / amplitude + 1.0F) * 0.5F, 0.0F, 1.0F);
+                if (flying && WingFlexConfig.DIP_ENABLED.get()) {
+                    // Gliding: lowest when the wings are up, normal height when they're down
                     targetDip = -WingFlexConfig.DIP_DEPTH.get().floatValue() * flapping * strokeHeight;
+                } else if (hovering && WingFlexConfig.HOVER_POP_ENABLED.get()) {
+                    // Hovering: the mirror image. Highest when the wings are down (end of the downstroke),
+                    // back to normal height when they're up
+                    targetPop = WingFlexConfig.HOVER_POP_HEIGHT.get().floatValue() * flapping * (1.0F - strokeHeight);
                 }
             }
-            dip += (targetDip - dip) * (1.0F - (float) Math.exp(-dt / DIP_SMOOTHING));
+            float smoothing = 1.0F - (float) Math.exp(-dt / DIP_SMOOTHING);
+            dip += (targetDip - dip) * smoothing;
+            pop += (targetPop - pop) * smoothing;
         }
 
         float bend(float maxBend) {

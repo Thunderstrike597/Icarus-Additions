@@ -33,11 +33,19 @@ public class PlayerPatchMixin {
     public void replaceUpdateMotion(boolean considerInaction, CallbackInfo ci){
         AbstractClientPlayerPatch self = (AbstractClientPlayerPatch)(Object)this;
         if(self.getOriginal() instanceof Player player) {
+            boolean isBreaking = ClientHoverHandler.isBreaking(player);
             boolean isHovering = ClientHoverHandler.isHovering(player);
-            if(!isHovering)return;
-            
+            LivingMotion breakingMotion = LivingMotions.FLOAT;
 
-            self.currentLivingMotion = LivingMotions.CREATIVE_IDLE;
+            LivingMotion hoveringMotion = LivingMotions.CREATIVE_IDLE;
+
+
+            if(!isHovering && !isBreaking)return;
+
+
+            self.currentLivingMotion = isBreaking ? breakingMotion : hoveringMotion;
+
+
 
             UpdatePlayerMotionEvent.BaseLayer baseLayerEvent = new UpdatePlayerMotionEvent.BaseLayer(self, self.currentLivingMotion, !self.getEntityState().updateLivingMotion() && considerInaction);
             self.getEventListener().triggerEvents(PlayerEventListener.EventType.UPDATE_BASE_LIVING_MOTION_EVENT, baseLayerEvent);

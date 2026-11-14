@@ -25,10 +25,16 @@ public abstract class CameraMixin {
     @Inject(method = "setup", at = @At("TAIL"))
     private void icarusWingFlex$followDip(BlockGetter level, Entity entity, boolean detached, boolean thirdPersonReverse,
                                           float partialTick, CallbackInfo ci) {
-        if (!detached || !WingFlexConfig.CAMERA_FOLLOWS_DIP.get() || !WingFlexConfig.DIP_ENABLED.get()) return;
-        float dip = WingFlexAnimator.getDip(entity, partialTick);
-        if (dip != 0.0F) {
-            setPosition(getPosition().add(0.0D, dip, 0.0D));
+        if (!detached) return;
+        float offset = 0.0F;
+        if (WingFlexConfig.CAMERA_FOLLOWS_DIP.get() && WingFlexConfig.DIP_ENABLED.get()) {
+            offset += WingFlexAnimator.getDip(entity, partialTick);
+        }
+        if (WingFlexConfig.CAMERA_FOLLOWS_HOVER_POP.get() && WingFlexConfig.HOVER_POP_ENABLED.get()) {
+            offset += WingFlexAnimator.getPop(entity, partialTick);
+        }
+        if (offset != 0.0F) {
+            setPosition(getPosition().add(0.0D, offset, 0.0D));
         }
     }
 }
