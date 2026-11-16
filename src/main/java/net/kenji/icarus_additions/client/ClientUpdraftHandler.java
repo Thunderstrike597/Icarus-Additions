@@ -100,7 +100,18 @@ public final class ClientUpdraftHandler {
             HoverHelper.forceUpright(player);
         }
     }
-
+    public static int estimateAscentTicks(double height, double speedMult) {
+        double y = 0.0D;
+        int ticks = 0;
+        while (height - y > TOP_EPSILON && ticks < MAX_ASCENT_TICKS) {
+            double remaining = height - y;
+            double vy = Mth.clamp(remaining * Math.min(0.9D, ASCENT_RATE * speedMult),
+                    ASCENT_MIN_SPEED * speedMult, ASCENT_MAX_SPEED * speedMult);
+            y += Math.min(vy, remaining + 0.05D);
+            ticks++;
+        }
+        return ticks;
+    }
     private static void tickLocal(LocalPlayer player, State s) {
         if (s.blockHoverUntilUncrouch && !player.isShiftKeyDown()) {
             s.blockHoverUntilUncrouch = false;

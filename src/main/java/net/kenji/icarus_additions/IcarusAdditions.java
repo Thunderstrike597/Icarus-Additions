@@ -35,7 +35,6 @@ public class IcarusAdditions {
         ctx.registerConfig(ModConfig.Type.SERVER, ConfigServer.SPEC);
         IcarusAdditionsEnchantments.register(modEventBus);
         IcarusAdditionsNetwork.register();
-
         // Optional on either side: visuals are client-only, and the hover falls back to client-side if the server
         // doesn't have the mod (the network channel is acceptMissingOr as well).
         ctx.registerExtensionPoint(IExtensionPoint.DisplayTest.class,

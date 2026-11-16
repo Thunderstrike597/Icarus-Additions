@@ -23,6 +23,7 @@ public final class IcarusAdditionsEnchantments {
 
     private IcarusAdditionsEnchantments() {}
 
+
     public static void register(IEventBus modEventBus) {
         ENCHANTMENTS.register(modEventBus);
     }
