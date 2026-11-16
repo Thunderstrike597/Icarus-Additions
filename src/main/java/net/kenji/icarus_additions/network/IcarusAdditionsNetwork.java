@@ -13,7 +13,7 @@ import java.util.Optional;
  * falls back to doing the hover locally.
  */
 public final class IcarusAdditionsNetwork {
-    private static final String VERSION = "1";
+    private static final String VERSION = "3";
 
     public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
             new ResourceLocation(IcarusAdditions.MOD_ID, "main"),
@@ -29,5 +29,11 @@ public final class IcarusAdditionsNetwork {
                 HoverStateC2SPacket::handle, Optional.of(NetworkDirection.PLAY_TO_SERVER));
         CHANNEL.registerMessage(id++, HoverSyncS2CPacket.class, HoverSyncS2CPacket::encode, HoverSyncS2CPacket::decode,
                 HoverSyncS2CPacket::handle, Optional.of(NetworkDirection.PLAY_TO_CLIENT));
+        CHANNEL.registerMessage(id++, UpdraftLaunchC2SPacket.class, UpdraftLaunchC2SPacket::encode, UpdraftLaunchC2SPacket::decode,
+                UpdraftLaunchC2SPacket::handle, Optional.of(NetworkDirection.PLAY_TO_SERVER));
+        CHANNEL.registerMessage(id++, UpdraftSyncS2CPacket.class, UpdraftSyncS2CPacket::encode, UpdraftSyncS2CPacket::decode,
+                UpdraftSyncS2CPacket::handle, Optional.of(NetworkDirection.PLAY_TO_CLIENT));
+        CHANNEL.registerMessage(id++, UpdraftFlightC2SPacket.class, UpdraftFlightC2SPacket::encode, UpdraftFlightC2SPacket::decode,
+                UpdraftFlightC2SPacket::handle, Optional.of(NetworkDirection.PLAY_TO_SERVER));
     }
 }

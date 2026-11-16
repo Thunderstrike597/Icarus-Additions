@@ -7,8 +7,9 @@ import dev.cammiescorner.icarus.client.models.LeatherWingsModel;
 import dev.cammiescorner.icarus.client.models.WingEntityModel;
 import dev.cammiescorner.icarus.client.models.ZanzasWingsModel;
 import net.kenji.icarus_additions.IcarusAdditions;
-import net.kenji.icarus_additions.WingFlexConfig;
-import net.kenji.icarus_additions.hover.HoverPhase;
+import net.kenji.icarus_additions.ConfigClient;
+import net.kenji.icarus_additions.mechanisms.hover.HoverPhase;
+import net.kenji.icarus_additions.mechanisms.updraft.UpdraftPhase;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
@@ -79,25 +80,32 @@ public final class WingFlexAnimator {
         // Hover: spread the wings like in flight (Icarus thinks we're just standing/crouching) with a hovering flap.
         // Blended in/out so the wings open and fold smoothly.
         // Braking: held open like a glide, no flapping. Hovering: the flap fades in.
+        // Updraft: charged = spread like braking (no flap); launching = spread + one heavy beat.
         HoverPhase phase = ClientHoverHandler.getPhase(entity);
-        float hoverBlend = state.updateHoverBlend(ageInTicks, phase != HoverPhase.NONE, phase == HoverPhase.HOVERING);
+        UpdraftPhase updraft = ClientUpdraftHandler.getPhase(entity);
+        boolean spread = phase != HoverPhase.NONE || updraft != UpdraftPhase.NONE;
+        float hoverBlend = state.updateHoverBlend(ageInTicks, spread, phase == HoverPhase.HOVERING);
         if (hoverBlend > 0.0F) {
             applyHoverPose(model, ageInTicks, hoverBlend, state.hoverFlap);
+            float launchAge = ClientUpdraftHandler.getLaunchAge(entity, ageInTicks);
+            if (launchAge >= 0.0F && launchAge < ClientUpdraftHandler.BEAT_TICKS) {
+                applyLaunchBeat(model, launchAge / ClientUpdraftHandler.BEAT_TICKS, hoverBlend);
+            }
         }
 
         // Always track the flap (the dip uses it too, even on wings with no elbow like Light wings)
         float rootX = model.leftWing.xRot; // right wing mirrors the same xRot
         state.update(rootX, ageInTicks, entity.isFallFlying(), phase == HoverPhase.HOVERING,
-                WingFlexConfig.UP_BEND_AMOUNT.get().floatValue(),
-                WingFlexConfig.DOWN_BEND_AMOUNT.get().floatValue(),
-                WingFlexConfig.FOLLOW_LAG.get().floatValue());
+                ConfigClient.UP_BEND_AMOUNT.get().floatValue(),
+                ConfigClient.DOWN_BEND_AMOUNT.get().floatValue(),
+                ConfigClient.FOLLOW_LAG.get().floatValue());
 
-        if (!WingFlexConfig.ENABLED.get()) return;
+        if (!ConfigClient.ENABLED.get()) return;
         Joint[] joints = JOINTS.get(model);
         if (joints == null) return;
-        if (model instanceof ZanzasWingsModel && !WingFlexConfig.BEND_ZANZA.get()) return;
+        if (model instanceof ZanzasWingsModel && !ConfigClient.BEND_ZANZA.get()) return;
 
-        float bend = state.bend((float) Math.toRadians(WingFlexConfig.MAX_BEND_DEGREES.get()));
+        float bend = state.bend((float) Math.toRadians(ConfigClient.MAX_BEND_DEGREES.get()));
         if (Math.abs(bend) < 1.0E-4F) return;
         for (Joint j : joints) applyBend(j, bend);
     }
@@ -123,7 +131,7 @@ public final class WingFlexAnimator {
 
         // Icarus roots the wings fairly low on the back (tuned for the horizontal flying pose). Upright, that reads
         // as mid/lower back, so lift them while braking/hovering. Model space is y-down: subtracting moves up.
-        float lift = WingFlexConfig.HOVER_WING_LIFT.get().floatValue();
+        float lift = ConfigClient.HOVER_WING_LIFT.get().floatValue();
         left.y = Mth.lerp(blend, left.y, left.y - lift);
         right.y = left.y;
 
@@ -138,6 +146,28 @@ public final class WingFlexAnimator {
             } catch (NoSuchElementException ignored) {
             }
         }
+    }
+
+    /**
+     * One heavy flap for the Updraft launch, as an offset on the root flap angle (+ = up, same as the flap dip):
+     * quick raise, hard downstroke, then settle back to the spread pose. t goes 0..1 over BEAT_TICKS.
+     */
+    private static void applyLaunchBeat(WingEntityModel<?> model, float t, float blend) {
+        float offset;
+        if (t < 0.2F) {
+            offset = 1.1F * smooth(t / 0.2F);                         // raise
+        } else if (t < 0.55F) {
+            offset = Mth.lerp(smooth((t - 0.2F) / 0.35F), 1.1F, -1.2F); // slam down
+        } else {
+            offset = -1.2F * (1.0F - smooth((t - 0.55F) / 0.45F));    // recover
+        }
+        model.leftWing.xRot += offset * blend;
+        model.rightWing.xRot = model.leftWing.xRot;
+    }
+
+    private static float smooth(float x) {
+        x = Mth.clamp(x, 0.0F, 1.0F);
+        return x * x * (3.0F - 2.0F * x);
     }
 
     /** The FLYING-state elbow xRot each model sets in its own setupAnim, or NaN if the model doesn't do that. */
@@ -320,13 +350,13 @@ public final class WingFlexAnimator {
             if (flapping > 0.0F) {
                 // 0 = wings at the bottom of the stroke, 1 = wings at the top
                 float strokeHeight = Mth.clamp((flap / amplitude + 1.0F) * 0.5F, 0.0F, 1.0F);
-                if (flying && WingFlexConfig.DIP_ENABLED.get()) {
+                if (flying && ConfigClient.DIP_ENABLED.get()) {
                     // Gliding: lowest when the wings are up, normal height when they're down
-                    targetDip = -WingFlexConfig.DIP_DEPTH.get().floatValue() * flapping * strokeHeight;
-                } else if (hovering && WingFlexConfig.HOVER_POP_ENABLED.get()) {
+                    targetDip = -ConfigClient.DIP_DEPTH.get().floatValue() * flapping * strokeHeight;
+                } else if (hovering && ConfigClient.HOVER_POP_ENABLED.get()) {
                     // Hovering: the mirror image. Highest when the wings are down (end of the downstroke),
                     // back to normal height when they're up
-                    targetPop = WingFlexConfig.HOVER_POP_HEIGHT.get().floatValue() * flapping * (1.0F - strokeHeight);
+                    targetPop = ConfigClient.HOVER_POP_HEIGHT.get().floatValue() * flapping * (1.0F - strokeHeight);
                 }
             }
             float smoothing = 1.0F - (float) Math.exp(-dt / DIP_SMOOTHING);

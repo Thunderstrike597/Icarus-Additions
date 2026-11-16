@@ -1,7 +1,7 @@
 package net.kenji.icarus_additions.network;
 
-import net.kenji.icarus_additions.hover.HoverPhase;
-import net.kenji.icarus_additions.hover.ServerHoverHandler;
+import net.kenji.icarus_additions.mechanisms.hover.HoverPhase;
+import net.kenji.icarus_additions.mechanisms.hover.ServerHoverHandler;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkEvent;

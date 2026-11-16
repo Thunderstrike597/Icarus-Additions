@@ -15,5 +15,8 @@ public class PlayerPatchMixin {
     @Inject(method = "initAnimator", at = @At("HEAD"))
     private void addLivingMotions(Animator animator, CallbackInfo ci){
         animator.addLivingAnimation(IcarusAdditionsLivingMotions.AIR_BREAK, IcarusAdditionsAnimations.AIR_BREAK);
+        animator.addLivingAnimation(IcarusAdditionsLivingMotions.UPDRAFT, IcarusAdditionsAnimations.UPDRAFT);
+        animator.addLivingAnimation(IcarusAdditionsLivingMotions.UPDRAFT_CHARGED, IcarusAdditionsAnimations.UPDRAFT_CHARGED);
+
     }
 }

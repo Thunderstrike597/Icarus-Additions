@@ -1,6 +1,6 @@
 package net.kenji.icarus_additions.mixin;
 
-import net.kenji.icarus_additions.WingFlexConfig;
+import net.kenji.icarus_additions.ConfigClient;
 import net.kenji.icarus_additions.client.WingFlexAnimator;
 import net.minecraft.client.Camera;
 import net.minecraft.world.entity.Entity;
@@ -27,10 +27,10 @@ public abstract class CameraMixin {
                                           float partialTick, CallbackInfo ci) {
         if (!detached) return;
         float offset = 0.0F;
-        if (WingFlexConfig.CAMERA_FOLLOWS_DIP.get() && WingFlexConfig.DIP_ENABLED.get()) {
+        if (ConfigClient.CAMERA_FOLLOWS_DIP.get() && ConfigClient.DIP_ENABLED.get()) {
             offset += WingFlexAnimator.getDip(entity, partialTick);
         }
-        if (WingFlexConfig.CAMERA_FOLLOWS_HOVER_POP.get() && WingFlexConfig.HOVER_POP_ENABLED.get()) {
+        if (ConfigClient.CAMERA_FOLLOWS_HOVER_POP.get() && ConfigClient.HOVER_POP_ENABLED.get()) {
             offset += WingFlexAnimator.getPop(entity, partialTick);
         }
         if (offset != 0.0F) {

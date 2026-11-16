@@ -1,7 +1,9 @@
 package net.kenji.icarus_additions.mixin;
 
 import net.kenji.icarus_additions.client.ClientHoverHandler;
+import net.kenji.icarus_additions.client.ClientUpdraftHandler;
 import net.kenji.icarus_additions.compat.epicfight.IcarusAdditionsLivingMotions;
+import net.kenji.icarus_additions.mechanisms.updraft.UpdraftPhase;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Player;
@@ -30,18 +32,22 @@ public class AbstractClientPlayerPatchMixin {
         if(self.getOriginal() instanceof Player player) {
             boolean isBreaking = ClientHoverHandler.isBreaking(player);
             boolean isHovering = ClientHoverHandler.isHovering(player);
+            boolean isUpdraftCharged = ClientUpdraftHandler.getPhase(player) == UpdraftPhase.CHARGED;
+
             LivingMotion breakingMotion = IcarusAdditionsLivingMotions.AIR_BREAK;
+            LivingMotion updraftChargedMotion = IcarusAdditionsLivingMotions.UPDRAFT_CHARGED;
 
             LivingMotion hoveringMotion = LivingMotions.CREATIVE_IDLE;
 
 
-            if(!isHovering && !isBreaking)return;
+            if(!isHovering && !isBreaking && !isUpdraftCharged)return;
 
-
-            self.currentLivingMotion = isBreaking ? breakingMotion : hoveringMotion;
-
-
-
+            if(isHovering)
+                self.currentLivingMotion = hoveringMotion;
+            if(isBreaking)
+                self.currentLivingMotion = breakingMotion;
+            if(isUpdraftCharged)
+                self.currentLivingMotion = updraftChargedMotion;
             UpdatePlayerMotionEvent.BaseLayer baseLayerEvent = new UpdatePlayerMotionEvent.BaseLayer(self, self.currentLivingMotion, !self.getEntityState().updateLivingMotion() && considerInaction);
             self.getEventListener().triggerEvents(PlayerEventListener.EventType.UPDATE_BASE_LIVING_MOTION_EVENT, baseLayerEvent);
             MinecraftForge.EVENT_BUS.post(baseLayerEvent);

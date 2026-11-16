@@ -4,6 +4,7 @@
   "package": "net.kenji.icarus_additions.mixin",
   "compatibilityLevel": "JAVA_17",
   "refmap": "icarus_additions.refmap.json",
+  "plugin": "net.kenji.icarus_additions.CompatMixinPlugin",
   "mixins":[
     "PlayerPatchMixin"
   ],

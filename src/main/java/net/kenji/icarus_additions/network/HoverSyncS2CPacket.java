@@ -1,6 +1,6 @@
 package net.kenji.icarus_additions.network;
 
-import net.kenji.icarus_additions.hover.HoverPhase;
+import net.kenji.icarus_additions.mechanisms.hover.HoverPhase;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.fml.DistExecutor;

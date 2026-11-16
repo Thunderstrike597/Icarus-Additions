@@ -2,9 +2,9 @@ package net.kenji.icarus_additions.client;
 
 import dev.cammiescorner.icarus.util.IcarusHelper;
 import net.kenji.icarus_additions.IcarusAdditions;
-import net.kenji.icarus_additions.WingFlexConfig;
-import net.kenji.icarus_additions.hover.HoverHelper;
-import net.kenji.icarus_additions.hover.HoverPhase;
+import net.kenji.icarus_additions.ConfigClient;
+import net.kenji.icarus_additions.mechanisms.hover.HoverHelper;
+import net.kenji.icarus_additions.mechanisms.hover.HoverPhase;
 import net.kenji.icarus_additions.network.HoverStateC2SPacket;
 import net.kenji.icarus_additions.network.IcarusAdditionsNetwork;
 import net.minecraft.client.Minecraft;
@@ -84,11 +84,12 @@ public final class ClientHoverHandler {
 
     private static void tickLocal(LocalPlayer player) {
         HoverState s = STATES.computeIfAbsent(player, p -> new HoverState());
-        boolean enabled = WingFlexConfig.HOVER_ENABLED.get();
+        boolean enabled = ConfigClient.HOVER_ENABLED.get();
         boolean crouching = player.isShiftKeyDown();
 
         if (s.phase == HoverPhase.NONE) {
-            if (enabled && crouching && (player.isFallFlying() || s.wasIcarusFlying) && HoverHelper.canHover(player)) {
+            if (enabled && crouching && (player.isFallFlying() || s.wasIcarusFlying) && HoverHelper.canHover(player)
+                    && !ClientUpdraftHandler.blocksHover(player)) {
                 s.entryPitch = player.getXRot();
                 s.entryTime = player.tickCount;
                 Vec3 entryVelocity = player.getDeltaMovement();
@@ -107,7 +108,7 @@ public final class ClientHoverHandler {
 
             Vec3 v = player.getDeltaMovement();
             if (s.phase == HoverPhase.BRAKING) {
-                double speed = brake(player, s, v, WingFlexConfig.HOVER_SLOW_DOWN_INTENSITY.get());
+                double speed = brake(player, s, v, ConfigClient.HOVER_SLOW_DOWN_INTENSITY.get());
                 if (speed < STOPPED_SPEED || s.phaseTicks >= MAX_BRAKE_TICKS) {
                     setLocalPhase(player, s, HoverPhase.HOVERING);
                 }

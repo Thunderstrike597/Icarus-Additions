@@ -1,4 +1,4 @@
-package net.kenji.icarus_additions.hover;
+package net.kenji.icarus_additions.mechanisms.hover;
 
 import net.kenji.icarus_additions.IcarusAdditions;
 import net.kenji.icarus_additions.network.HoverSyncS2CPacket;

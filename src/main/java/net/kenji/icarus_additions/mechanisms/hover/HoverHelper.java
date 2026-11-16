@@ -1,4 +1,4 @@
-package net.kenji.icarus_additions.hover;
+package net.kenji.icarus_additions.mechanisms.hover;
 
 import dev.cammiescorner.icarus.util.IcarusHelper;
 import net.minecraft.world.effect.MobEffectInstance;

@@ -3,7 +3,9 @@ package net.kenji.icarus_additions.compat.epicfight;
 import yesman.epicfight.api.animation.LivingMotion;
 
 public enum IcarusAdditionsLivingMotions implements LivingMotion {
-    AIR_BREAK;
+    AIR_BREAK,
+    UPDRAFT_CHARGED,
+    UPDRAFT;
 
     final int id;
 

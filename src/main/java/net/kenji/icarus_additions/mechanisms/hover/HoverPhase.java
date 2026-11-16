@@ -1,4 +1,4 @@
-package net.kenji.icarus_additions.hover;
+package net.kenji.icarus_additions.mechanisms.hover;
 
 public enum HoverPhase {
     /** Not hovering. */
