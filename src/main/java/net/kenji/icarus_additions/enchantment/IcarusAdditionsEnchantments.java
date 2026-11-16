@@ -2,6 +2,7 @@ package net.kenji.icarus_additions.enchantment;
 
 import dev.cammiescorner.icarus.item.WingItem;
 import net.kenji.icarus_additions.IcarusAdditions;
+import net.kenji.icarus_additions.enchantment.custom.TempestEnchantment;
 import net.kenji.icarus_additions.enchantment.custom.UpdraftEnchantment;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.EnchantmentCategory;
@@ -18,6 +19,7 @@ public final class IcarusAdditionsEnchantments {
             DeferredRegister.create(ForgeRegistries.ENCHANTMENTS, IcarusAdditions.MOD_ID);
 
     public static final RegistryObject<Enchantment> UPDRAFT = ENCHANTMENTS.register("updraft", UpdraftEnchantment::new);
+    public static final RegistryObject<Enchantment> TEMPEST = ENCHANTMENTS.register("tempest", TempestEnchantment::new);
 
     private IcarusAdditionsEnchantments() {}
 

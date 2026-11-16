@@ -19,6 +19,11 @@ public final class ConfigServer {
     public static final ForgeConfigSpec.DoubleValue ASCENT_SPEED_MULTIPLIER;
     public static final ForgeConfigSpec.BooleanValue PARTICLES;
 
+    public static final ForgeConfigSpec.BooleanValue TEMPEST_ENABLED;
+    public static final ForgeConfigSpec.DoubleValue BASE_TEMPEST_COOLDOWN_SECONDS;
+    public static final ForgeConfigSpec.DoubleValue TEMPEST_SPEED_MULTIPLIER;
+    public static final ForgeConfigSpec.DoubleValue TEMPEST_COOLDOWN_MULTIPLIER;
+
     static {
         ForgeConfigSpec.Builder b = new ForgeConfigSpec.Builder();
         b.push("Updraft");
@@ -46,6 +51,27 @@ public final class ConfigServer {
 
         PARTICLES = b.comment("Upward draft particles around the player while charged, and a burst on launch.")
                 .define("particles", true);
+
+        b.pop();
+
+        b.push("Tempest");
+
+        TEMPEST_ENABLED = b.comment("Enables the Tempest enchantment's ability (press sprint while flying to spin dash, like Riptide).")
+                .define("enabled", true);
+
+        BASE_TEMPEST_COOLDOWN_SECONDS = b.comment(
+                        "Base Seconds before another dash can be used. Shown as a cooldown on the wings item.",
+                        "0 = no cooldown (dashes can be chained back to back).")
+                .defineInRange("cooldownSeconds", 8.0, 0.0, 60.0);
+
+        TEMPEST_SPEED_MULTIPLIER = b.comment(
+                        "Multiplies the dash strength. 1.0 = exactly Riptide's push for the same level",
+                        "(I = 1.5, II = 2.25, III = 3.0 blocks/tick).")
+                .defineInRange("speedMultiplier", 1.0, 0.1, 5.0);
+        TEMPEST_COOLDOWN_MULTIPLIER = b.comment(
+                        "Divides the base tempest dash cooldown for ever level after I",
+                        "(I = 8s, II = 5.3s, III = 3.5s cooldown).")
+                .defineInRange("tempestCooldownDivideAmount", 1.5, 0.1, 5.0);
 
         b.pop();
         SPEC = b.build();

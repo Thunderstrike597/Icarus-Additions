@@ -5,20 +5,28 @@ import net.kenji.icarus_additions.IcarusAdditions;
 import net.kenji.icarus_additions.ConfigClient;
 import net.kenji.icarus_additions.mechanisms.hover.HoverHelper;
 import net.kenji.icarus_additions.mechanisms.hover.HoverPhase;
+import net.kenji.icarus_additions.mixin.ToggleKeyMappingInvoker;
 import net.kenji.icarus_additions.network.HoverStateC2SPacket;
 import net.kenji.icarus_additions.network.IcarusAdditionsNetwork;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.ToggleKeyMapping;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.client.event.InputEvent;
 import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.entity.living.LivingEvent;
+import net.minecraftforge.event.entity.player.PlayerFlyableFallEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.LogicalSide;
 import net.minecraftforge.fml.common.Mod;
+import org.jline.utils.Log;
 
 import java.util.Map;
 import java.util.WeakHashMap;
@@ -42,6 +50,7 @@ public final class ClientHoverHandler {
      * input) so the slowdown is smooth and controlled purely by hover.slowDownIntensity.
      * Per tick at intensity 1: speed * exp(-0.05) - 0.005. ~2s from fast flight; intensity 2 halves that.
      */
+
     private static final double BRAKE_EXP_PER_INTENSITY = 0.05D;
     private static final double BRAKE_LINEAR_PER_INTENSITY = 0.005D;
     /** Vertical speed eases toward a gentle sink while braking (also scaled by intensity). */
@@ -64,6 +73,7 @@ public final class ClientHoverHandler {
         float entryTime;
         /** Velocity carried through the braking phase. */
         double carryX, carryY, carryZ;
+        boolean blockUntilUncrouch;
     }
 
     private static final Map<Player, HoverState> STATES = new WeakHashMap<>();
@@ -71,6 +81,20 @@ public final class ClientHoverHandler {
     private ClientHoverHandler() {}
 
     // ---------------------------------------------------------------- ticking
+    @SubscribeEvent
+    public static void onFallFlying(InputEvent.InteractionKeyMappingTriggered event){
+        Minecraft minecraft = Minecraft.getInstance();
+        Player player = minecraft.player;
+        if(player == null)return;
+        if(event.getKeyMapping() == minecraft.options.keyJump) {
+            HoverState s = STATES.computeIfAbsent(player, p -> new HoverState());
+
+            if (s.phase == HoverPhase.HOVERING || s.phase == HoverPhase.BRAKING) {
+                player.setShiftKeyDown(false);
+                Log.info("Logging Shift Key Down False");
+            }
+        }
+    }
 
     @SubscribeEvent
     public static void onPlayerTick(TickEvent.PlayerTickEvent event) {
@@ -87,9 +111,16 @@ public final class ClientHoverHandler {
         boolean enabled = ConfigClient.HOVER_ENABLED.get();
         boolean crouching = player.isShiftKeyDown();
 
+        // (1) Re-arm once crouch has been let go (or toggled off)
+        if (s.blockUntilUncrouch && !crouching) {
+            s.blockUntilUncrouch = false;
+        }
+
         if (s.phase == HoverPhase.NONE) {
-            if (enabled && crouching && (player.isFallFlying() || s.wasIcarusFlying) && HoverHelper.canHover(player)
-                    && !ClientUpdraftHandler.blocksHover(player)) {
+            if (enabled && crouching && !s.blockUntilUncrouch                      // (2) new check
+                    && (player.isFallFlying() || s.wasIcarusFlying) && HoverHelper.canHover(player)
+                    && !ClientUpdraftHandler.blocksHover(player)
+                    && !ClientTempestHandler.isDashing(player)) {
                 s.entryPitch = player.getXRot();
                 s.entryTime = player.tickCount;
                 Vec3 entryVelocity = player.getDeltaMovement();
@@ -99,7 +130,12 @@ public final class ClientHoverHandler {
                 if (player.isFallFlying()) player.stopFallFlying();
                 setLocalPhase(player, s, HoverPhase.BRAKING);
             }
-        } else if (!enabled || !crouching || player.isFallFlying() || !HoverHelper.canHover(player)) {
+        }  else if (player.isFallFlying()) {
+            // (3) Jumped out of the hover into flight: end it, and don't let a still-held/toggled crouch re-trigger it
+            setLocalPhase(player, s, HoverPhase.NONE);
+            s.blockUntilUncrouch = true;
+            releaseToggledCrouch();
+        } else if (!enabled || !crouching || !HoverHelper.canHover(player)) {
             setLocalPhase(player, s, HoverPhase.NONE);
         } else {
             s.phaseTicks++;
@@ -112,6 +148,7 @@ public final class ClientHoverHandler {
                 if (speed < STOPPED_SPEED || s.phaseTicks >= MAX_BRAKE_TICKS) {
                     setLocalPhase(player, s, HoverPhase.HOVERING);
                 }
+
             } else {
                 player.setDeltaMovement(v.x * HOVER_DRIFT_DAMP, v.y, v.z * HOVER_DRIFT_DAMP);
                 // Applied locally too, so the physics kick in this tick instead of after a server round trip
@@ -123,6 +160,11 @@ public final class ClientHoverHandler {
         s.wasIcarusFlying = player.isFallFlying() && IcarusHelper.hasWings(player);
     }
 
+    private static void releaseToggledCrouch() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.options.toggleCrouch().get() && mc.options.keyShift instanceof ToggleKeyMapping toggle && toggle.isDown()) {
+            ((ToggleKeyMappingInvoker) toggle).icarusAdditions$reset();        }
+    }
     /** Decelerates the carried velocity one tick and applies it. Returns the new horizontal speed. */
     private static double brake(LocalPlayer player, HoverState s, Vec3 actual, double intensity) {
         // Walls / ceilings: Entity.move zeroes the blocked axis, so stop carrying speed into it
@@ -178,7 +220,7 @@ public final class ClientHoverHandler {
         if (!(entity instanceof Player player) || player == mc.player) return;
 
         HoverState s = STATES.computeIfAbsent(player, p -> new HoverState());
-        if (s.phase == HoverPhase.NONE && phase != HoverPhase.NONE) {
+        if (s.phase == HoverPhase.NONE && phase != net.kenji.icarus_additions.mechanisms.hover.HoverPhase.NONE) {
             s.entryPitch = player.getXRot();
             s.entryTime = player.tickCount;
         }
@@ -193,7 +235,7 @@ public final class ClientHoverHandler {
     // ---------------------------------------------------------------- render accessors
 
     public static HoverPhase getPhase(Entity entity) {
-        if (!(entity instanceof Player player)) return HoverPhase.NONE;
+        if (!(entity instanceof Player player)) return net.kenji.icarus_additions.mechanisms.hover.HoverPhase.NONE;
         HoverState s = STATES.get(player);
         return s == null ? HoverPhase.NONE : s.phase;
     }

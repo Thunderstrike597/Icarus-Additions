@@ -11,7 +11,8 @@
   "client": [
     "WingsLayerMixin",
     "CameraMixin",
-    "AbstractClientPlayerPatchMixin"
+    "AbstractClientPlayerPatchMixin",
+    "ToggleKeyMappingInvoker"
   ],
   "injectors": {
     "defaultRequire": 0
