@@ -81,8 +81,6 @@ public final class ServerUpdraftHandler {
                 // (A launch arrives as a packet before the client's jump movement, so this doesn't eat real launches.)
                 if (!crouchingStill) {
                     setPhase(player, s, UpdraftPhase.NONE);
-                } else if (ConfigServer.PARTICLES.get()) {
-                    spawnDraftParticles(player);
                 }
             }
             case LAUNCHING -> {
@@ -145,24 +143,6 @@ public final class ServerUpdraftHandler {
 
     // ---------------------------------------------------------------- particles (sent to everyone nearby)
 
-    private static void spawnDraftParticles(Player player) {
-        Minecraft mc = Minecraft.getInstance();
-        if (!ConfigServer.PARTICLES.get() || mc.options.particles().get() == ParticleStatus.MINIMAL) return;
-        if (player.tickCount % 2 != 0) return; // rate: every 2nd tick
-
-        RandomSource random = player.getRandom();
-        float angle = random.nextFloat() * Mth.TWO_PI;
-        double radius = 1.0D + Math.sqrt(random.nextDouble()) * 1.5D;   // 1.0 – 2.5 blocks out
-        double x = player.getX() + Mth.cos(angle) * radius;
-        double z = player.getZ() + Mth.sin(angle) * radius;
-        double y = player.getY() + random.nextDouble() * 0.4D;
-
-        Particle particle = mc.particleEngine.createParticle(ParticleTypes.POOF, x, y, z,
-                Mth.cos(angle) * 0.005D, 0.06D + random.nextDouble() * 0.175D, Mth.sin(angle) * 0.005D); // slight outward drift
-        if (particle != null) {
-            particle.scale(0.5F); // half size
-        }
-    }
 
 
 

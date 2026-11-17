@@ -10,8 +10,12 @@ import net.kenji.icarus_additions.ConfigServer;
 import net.kenji.icarus_additions.mechanisms.updraft.UpdraftHelper;
 import net.kenji.icarus_additions.mechanisms.updraft.UpdraftPhase;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.ParticleStatus;
+import net.minecraft.client.particle.Particle;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.util.Mth;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
@@ -94,12 +98,36 @@ public final class ClientUpdraftHandler {
         State s = STATES.get(player);
         if (s == null) return;
 
+        if (s.phase == UpdraftPhase.CHARGED) {
+            spawnDraftParticles(player); // every client draws its own, for every charged player it can see
+        }
+
         if (player == Minecraft.getInstance().player) {
             tickLocal((LocalPlayer) player, s);
         } else if (s.phase == UpdraftPhase.LAUNCHING) {
             HoverHelper.forceUpright(player);
         }
     }
+
+    private static void spawnDraftParticles(Player player) {
+        Minecraft mc = Minecraft.getInstance();
+        if (!ConfigServer.PARTICLES.get() || mc.options.particles().get() == ParticleStatus.MINIMAL) return;
+        if (player.tickCount % 2 != 0) return; // rate: every 2nd tick
+
+        RandomSource random = player.getRandom();
+        float angle = random.nextFloat() * Mth.TWO_PI;
+        double radius = 1.0D + Math.sqrt(random.nextDouble()) * 1.5D;   // 1.0 – 2.5 blocks out
+        double x = player.getX() + Mth.cos(angle) * radius;
+        double z = player.getZ() + Mth.sin(angle) * radius;
+        double y = player.getY() + random.nextDouble() * 0.4D;
+
+        Particle particle = mc.particleEngine.createParticle(ParticleTypes.POOF, x, y, z,
+                Mth.cos(angle) * 0.005D, 0.06D + random.nextDouble() * 0.175D, Mth.sin(angle) * 0.005D); // slight outward drift
+        if (particle != null) {
+            particle.scale(0.5F); // half size
+        }
+    }
+
     public static int estimateAscentTicks(double height, double speedMult) {
         double y = 0.0D;
         int ticks = 0;
