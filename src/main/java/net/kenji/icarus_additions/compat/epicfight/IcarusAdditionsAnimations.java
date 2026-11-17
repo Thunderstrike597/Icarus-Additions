@@ -16,6 +16,8 @@ public class IcarusAdditionsAnimations {
     public static AnimationManager.AnimationAccessor<? extends StaticAnimation> AIR_BREAK;
     public static AnimationManager.AnimationAccessor<? extends StaticAnimation> UPDRAFT;
     public static AnimationManager.AnimationAccessor<? extends StaticAnimation> UPDRAFT_CHARGED;
+    public static AnimationManager.AnimationAccessor<? extends StaticAnimation> ZEPHYR_FORWARD;
+    public static AnimationManager.AnimationAccessor<? extends StaticAnimation> ZEPHYR_DOWNWARD;
 
     public static void buildAnimations(AnimationManager.AnimationBuilder event){
         AIR_BREAK = event.nextAccessor("biped/air_break", animationAccessor -> new StaticAnimation(0.1F, true, animationAccessor, Armatures.BIPED));
@@ -48,6 +50,8 @@ public class IcarusAdditionsAnimations {
                 .addProperty(ClientAnimationProperties.LAYER_TYPE, Layer.LayerType.COMPOSITE_LAYER)
                 .addProperty(ClientAnimationProperties.PRIORITY, Layer.Priority.HIGHEST));
         UPDRAFT_CHARGED = event.nextAccessor("biped/updraft_charged", animationAccessor -> new StaticAnimation(0.25F, false, animationAccessor, Armatures.BIPED));
+        ZEPHYR_FORWARD = event.nextAccessor("biped/zephyr_forward", animationAccessor -> new StaticAnimation(0.15F, false, animationAccessor, Armatures.BIPED));
+        ZEPHYR_DOWNWARD = event.nextAccessor("biped/zephyr_downward", animationAccessor -> new StaticAnimation(0.15F, false, animationAccessor, Armatures.BIPED));
 
     }
 }

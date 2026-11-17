@@ -7,6 +7,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import yesman.epicfight.api.animation.Animator;
+import yesman.epicfight.gameasset.Animations;
 import yesman.epicfight.world.capabilities.entitypatch.player.PlayerPatch;
 
 @Mixin(value = PlayerPatch.class, remap = false)
@@ -17,6 +18,11 @@ public class PlayerPatchMixin {
         animator.addLivingAnimation(IcarusAdditionsLivingMotions.AIR_BREAK, IcarusAdditionsAnimations.AIR_BREAK);
         animator.addLivingAnimation(IcarusAdditionsLivingMotions.UPDRAFT, IcarusAdditionsAnimations.UPDRAFT);
         animator.addLivingAnimation(IcarusAdditionsLivingMotions.UPDRAFT_CHARGED, IcarusAdditionsAnimations.UPDRAFT_CHARGED);
+        animator.addLivingAnimation(IcarusAdditionsLivingMotions.ZEPHYR_FORWARD, IcarusAdditionsAnimations.ZEPHYR_FORWARD);
+        animator.addLivingAnimation(IcarusAdditionsLivingMotions.ZEPHYR_BACKWARD, Animations.BIPED_CREATIVE_FLYING);
+        animator.addLivingAnimation(IcarusAdditionsLivingMotions.ZEPHYR_DOWN, IcarusAdditionsAnimations.ZEPHYR_DOWNWARD);
+
+
 
     }
 }

@@ -6,7 +6,9 @@
   "refmap": "icarus_additions.refmap.json",
   "plugin": "net.kenji.icarus_additions.CompatMixinPlugin",
   "mixins":[
-    "PlayerPatchMixin"
+    "PlayerPatchMixin",
+    "PlayerHoverMixin",
+    "ServerGamePacketListenerImplAccessor"
   ],
   "client": [
     "WingsLayerMixin",

@@ -24,6 +24,11 @@ public final class ConfigServer {
     public static final ForgeConfigSpec.DoubleValue TEMPEST_SPEED_MULTIPLIER;
     public static final ForgeConfigSpec.DoubleValue TEMPEST_COOLDOWN_MULTIPLIER;
 
+    public static final ForgeConfigSpec.BooleanValue ZEPHYR_ENABLED;
+    public static final ForgeConfigSpec.DoubleValue ZEPHYR_BASE_MOVE_SPEED;
+    public static final ForgeConfigSpec.DoubleValue ZEPHYR_BASE_VERTICAL_SPEED;
+    public static final ForgeConfigSpec.DoubleValue ZEPHYR_SPEED_LEVEL_MULTIPLIER;
+
     static {
         ForgeConfigSpec.Builder b = new ForgeConfigSpec.Builder();
         b.push("Updraft");
@@ -72,6 +77,29 @@ public final class ConfigServer {
                         "Divides the base tempest dash cooldown for ever level after I",
                         "(I = 8s, II = 5.3s, III = 3.5s cooldown).")
                 .defineInRange("tempestCooldownDivideAmount", 1.5, 0.1, 5.0);
+
+        b.pop();
+
+        b.push("Zephyr");
+
+        ZEPHYR_ENABLED = b.comment(
+                        "Enables the Zephyr enchantment's controllable hover: press crouch mid-flight to brake into a hover,",
+                        "then jump to rise, crouch to sink and move around with the normal movement keys.",
+                        "Double-tap crouch (or land) to leave the hover.")
+                .define("enabled", true);
+
+        ZEPHYR_BASE_MOVE_SPEED = b.comment(
+                        "Top horizontal speed while hovering with Zephyr I, in blocks per second (walking is ~4.3).")
+                .defineInRange("baseMoveSpeed", 2.5, 0.1, 40.0);
+
+        ZEPHYR_BASE_VERTICAL_SPEED = b.comment(
+                        "Rise/sink speed while hovering with Zephyr I (holding jump / crouch), in blocks per second.")
+                .defineInRange("baseVerticalSpeed", 2.0, 0.1, 40.0);
+
+        ZEPHYR_SPEED_LEVEL_MULTIPLIER = b.comment(
+                        "Each level above I multiplies both hover speeds by this.",
+                        "With the defaults (2.5 b/s, x1.25): I = 2.5, II = 3.1, III = 3.9 blocks per second.")
+                .defineInRange("speedLevelMultiplier", 1.25, 1.0, 10.0);
 
         b.pop();
         SPEC = b.build();

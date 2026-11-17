@@ -1,6 +1,7 @@
 package net.kenji.icarus_additions.mechanisms.hover;
 
 import net.kenji.icarus_additions.IcarusAdditions;
+import net.kenji.icarus_additions.mixin.ServerGamePacketListenerImplAccessor;
 import net.kenji.icarus_additions.network.HoverSyncS2CPacket;
 import net.kenji.icarus_additions.network.IcarusAdditionsNetwork;
 import net.minecraft.server.level.ServerPlayer;
@@ -35,6 +36,9 @@ public final class ServerHoverHandler {
     }
 
     private static void setPhase(ServerPlayer player, HoverPhase phase) {
+        // Zephyr state is re-derived every time (the enchantment could be added/removed mid-hover)
+        HoverControlHelper.setActive(player, HoverControlHelper.canControl(player) ? phase : HoverPhase.NONE);
+
         HoverPhase old = PHASES.getOrDefault(player, HoverPhase.NONE);
         if (old == phase) return;
 
@@ -54,15 +58,23 @@ public final class ServerHoverHandler {
         HoverPhase phase = PHASES.get(player);
         if (phase == null) return;
 
+        // Zephyr hovers don't depend on crouch being held (the client leaves them with a double-tap / landing)
+        boolean controlled = HoverControlHelper.canControl(player);
+        HoverControlHelper.setActive(player, controlled ? phase : HoverPhase.NONE);
+
         // Fail-safes, in case the client's NONE packet is late or never comes
-        if (!HoverHelper.canHover(player) || player.isFallFlying() || !player.isShiftKeyDown()) {
+        if (!HoverHelper.canHover(player) || player.isFallFlying() || (!controlled && !player.isShiftKeyDown())) {
             setPhase(player, HoverPhase.NONE);
             return;
         }
 
         HoverHelper.forceUpright(player);
         player.resetFallDistance();
-        if (phase == HoverPhase.HOVERING) {
+        if (controlled) {
+            // The client holds the player still / rising on purpose: don't let vanilla kick them for "flying"
+            ((ServerGamePacketListenerImplAccessor) player.connection).icarusAdditions$setAboveGroundTickCount(0);
+            HoverHelper.removeSlowFall(player);
+        } else if (phase == HoverPhase.HOVERING) {
             HoverHelper.applySlowFall(player);
         }
     }

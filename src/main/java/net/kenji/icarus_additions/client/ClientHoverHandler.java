@@ -3,11 +3,16 @@ package net.kenji.icarus_additions.client;
 import dev.cammiescorner.icarus.util.IcarusHelper;
 import net.kenji.icarus_additions.IcarusAdditions;
 import net.kenji.icarus_additions.ConfigClient;
+import net.kenji.icarus_additions.mechanisms.hover.HoverControlHelper;
 import net.kenji.icarus_additions.mechanisms.hover.HoverHelper;
+import net.kenji.icarus_additions.mechanisms.hover.HoverMoveDirection;
+import net.kenji.icarus_additions.mechanisms.hover.HoverMovement;
 import net.kenji.icarus_additions.mechanisms.hover.HoverPhase;
 import net.kenji.icarus_additions.mixin.ToggleKeyMappingInvoker;
 import net.kenji.icarus_additions.network.HoverStateC2SPacket;
 import net.kenji.icarus_additions.network.IcarusAdditionsNetwork;
+import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.ToggleKeyMapping;
 import net.minecraft.client.multiplayer.ClientPacketListener;
@@ -27,6 +32,7 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.LogicalSide;
 import net.minecraftforge.fml.common.Mod;
 import org.jline.utils.Log;
+import org.lwjgl.glfw.GLFW;
 
 import java.util.Map;
 import java.util.WeakHashMap;
@@ -64,6 +70,14 @@ public final class ClientHoverHandler {
     private static final double HOVER_DRIFT_DAMP = 0.85D;
     /** Ticks to rotate from the horizontal flying pose to upright. */
     private static final float UPRIGHT_TICKS = 8.0F;
+    /** Zephyr: how quickly vertical speed eases toward the target (fraction per tick). */
+    private static final double ZEPHYR_VERTICAL_EASE = 0.3D;
+
+    // Zephyr crouch presses, recorded from raw key events so quick taps between two ticks (and toggle-crouch's
+    // "off" press, which isn't a rising edge of isShiftKeyDown) are never missed. Consumed every local tick.
+    private static boolean crouchPressPending;
+    private static boolean doubleTapPending;
+    private static long lastCrouchPressMs = -1L;
 
     public static final class HoverState {
         HoverPhase phase = HoverPhase.NONE;
@@ -74,6 +88,14 @@ public final class ClientHoverHandler {
         /** Velocity carried through the braking phase. */
         double carryX, carryY, carryZ;
         boolean blockUntilUncrouch;
+        /** Zephyr: this hover is the controllable one (decided on entry). */
+        boolean controlled;
+        /** Zephyr: crouch was down when the hover started; it has to be let go before crouch means "sink". */
+        boolean crouchLatched;
+        /** Zephyr: vertical speed we carry ourselves (eased toward the jump/crouch target). */
+        double hoverVy;
+        /** Movement over the last full tick, cached at the END of the player tick (after the move happened). */
+        HoverMovement movement = HoverMovement.ZERO;
     }
 
     private static final Map<Player, HoverState> STATES = new WeakHashMap<>();
@@ -91,9 +113,50 @@ public final class ClientHoverHandler {
 
             if (s.phase == HoverPhase.HOVERING || s.phase == HoverPhase.BRAKING) {
                 player.setShiftKeyDown(false);
-                Log.info("Logging Shift Key Down False");
             }
         }
+    }
+
+    @SubscribeEvent
+    public static void onKey(InputEvent.Key event) {
+        if (event.getAction() != GLFW.GLFW_PRESS) return;
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.screen != null) return;
+        if (mc.options.keyShift.isActiveAndMatches(InputConstants.getKey(event.getKey(), event.getScanCode()))) {
+            onCrouchPressed();
+        }
+    }
+
+    @SubscribeEvent
+    public static void onMouseButton(InputEvent.MouseButton.Post event) {
+        if (event.getAction() != GLFW.GLFW_PRESS) return;
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.screen != null) return;
+        if (mc.options.keyShift.isActiveAndMatches(InputConstants.Type.MOUSE.getOrCreate(event.getButton()))) {
+            onCrouchPressed();
+        }
+    }
+
+    private static void onCrouchPressed() {
+        long now = Util.getMillis();
+        crouchPressPending = true;
+        if (lastCrouchPressMs >= 0L && now - lastCrouchPressMs <= ConfigClient.HOVER_DOUBLE_TAP_WINDOW_MS.get()) {
+            doubleTapPending = true;
+            lastCrouchPressMs = -1L; // a third quick press starts a new pair instead of chaining
+        } else {
+            lastCrouchPressMs = now;
+        }
+    }
+
+    /** The press that starts a hover must not count as the first half of the exit double-tap. */
+    private static void resetDoubleTap() {
+        doubleTapPending = false;
+        lastCrouchPressMs = -1L;
+    }
+
+    /** Zephyr hover available for the local player right now. Needs the mod on the server (it prevents the fly-kick). */
+    private static boolean canControlHover(LocalPlayer player) {
+        return serverHasMod() && HoverControlHelper.canControl(player);
     }
 
     @SubscribeEvent
@@ -104,20 +167,38 @@ public final class ClientHoverHandler {
         } else {
             tickRemote(event.player);
         }
+
+        // Cache the movement now, while x - xo is this tick's real move. Read mid-tick (e.g. from Epic Fight's
+        // updateMotion, which runs before aiStep moves the player) x - xo would still be 0.
+        HoverState s = STATES.get(event.player);
+        if (s != null) {
+            s.movement = s.phase == HoverPhase.NONE ? HoverMovement.ZERO : HoverMovement.of(event.player);
+        }
     }
 
     private static void tickLocal(LocalPlayer player) {
         HoverState s = STATES.computeIfAbsent(player, p -> new HoverState());
         boolean enabled = ConfigClient.HOVER_ENABLED.get();
         boolean crouching = player.isShiftKeyDown();
+        boolean controllable = canControlHover(player);
+
+        boolean crouchPressed = crouchPressPending;
+        boolean doubleTapped = doubleTapPending;
+        crouchPressPending = false;
+        doubleTapPending = false;
 
         // (1) Re-arm once crouch has been let go (or toggled off)
         if (s.blockUntilUncrouch && !crouching) {
             s.blockUntilUncrouch = false;
         }
+        if (s.crouchLatched && !crouching) {
+            s.crouchLatched = false;
+        }
 
         if (s.phase == HoverPhase.NONE) {
-            if (enabled && crouching && !s.blockUntilUncrouch                      // (2) new check
+            // Zephyr: entered with a fresh crouch PRESS (held crouch doesn't count). Normal hover: crouch held.
+            boolean wantsHover = controllable ? crouchPressed : crouching && !s.blockUntilUncrouch;
+            if (enabled && wantsHover
                     && (player.isFallFlying() || s.wasIcarusFlying) && HoverHelper.canHover(player)
                     && !ClientUpdraftHandler.blocksHover(player)
                     && !ClientTempestHandler.isDashing(player)) {
@@ -127,16 +208,30 @@ public final class ClientHoverHandler {
                 s.carryX = entryVelocity.x;
                 s.carryY = entryVelocity.y;
                 s.carryZ = entryVelocity.z;
+                s.controlled = controllable;
+                if (controllable) {
+                    // Back to standing: toggle-crouch is switched off, a held crouch is ignored until it's let go
+                    s.crouchLatched = true;
+                    releaseToggledCrouch();
+                    resetDoubleTap();
+                }
                 if (player.isFallFlying()) player.stopFallFlying();
                 setLocalPhase(player, s, HoverPhase.BRAKING);
             }
-        }  else if (player.isFallFlying()) {
+        } else if (player.isFallFlying()) {
             // (3) Jumped out of the hover into flight: end it, and don't let a still-held/toggled crouch re-trigger it
+            // (Zephyr hovers block flight starts, so this is the normal hover only, or something external)
             setLocalPhase(player, s, HoverPhase.NONE);
             s.blockUntilUncrouch = true;
             releaseToggledCrouch();
-        } else if (!enabled || !crouching || !HoverHelper.canHover(player)) {
+        } else if (!enabled || !HoverHelper.canHover(player)
+                || (s.controlled ? doubleTapped || !controllable : !crouching)) {
+            // Zephyr: double-tap crouch or land (canHover) to leave; also if the enchantment went away mid-hover
+            boolean leftByDoubleTap = s.controlled && doubleTapped;
             setLocalPhase(player, s, HoverPhase.NONE);
+            if (leftByDoubleTap) {
+                releaseToggledCrouch(); // the 2nd tap may have toggled crouch on; don't drop out of the sky crouching
+            }
         } else {
             s.phaseTicks++;
             HoverHelper.forceUpright(player);
@@ -146,9 +241,12 @@ public final class ClientHoverHandler {
             if (s.phase == HoverPhase.BRAKING) {
                 double speed = brake(player, s, v, ConfigClient.HOVER_SLOW_DOWN_INTENSITY.get());
                 if (speed < STOPPED_SPEED || s.phaseTicks >= MAX_BRAKE_TICKS) {
+                    s.hoverVy = s.carryY;
                     setLocalPhase(player, s, HoverPhase.HOVERING);
                 }
 
+            } else if (s.controlled) {
+                tickControlledHover(player, s, crouching, v);
             } else {
                 player.setDeltaMovement(v.x * HOVER_DRIFT_DAMP, v.y, v.z * HOVER_DRIFT_DAMP);
                 // Applied locally too, so the physics kick in this tick instead of after a server round trip
@@ -158,6 +256,27 @@ public final class ClientHoverHandler {
         }
 
         s.wasIcarusFlying = player.isFallFlying() && IcarusHelper.hasWings(player);
+    }
+
+    /**
+     * Zephyr hover tick. Horizontal: nothing here at all. Vanilla air movement handles WASD (moveRelative with the
+     * player's yRot, 0.91 drag), with the speed set through Player#getFlyingSpeed in PlayerHoverMixin.
+     * Vertical: written at the end of the tick, so it's exactly how far the player moves next tick (gravity and
+     * drag are applied after the move and overwritten here again).
+     */
+    private static void tickControlledHover(LocalPlayer player, HoverState s, boolean crouching, Vec3 v) {
+        double speed = HoverControlHelper.getVerticalSpeed(HoverControlHelper.getLevel(player));
+        boolean up = player.input.jumping;
+        boolean down = crouching && !s.crouchLatched;
+        double target = up == down ? 0.0D : (up ? speed : -speed);
+
+        // Bumped a ceiling: don't keep pushing into it
+        if (player.verticalCollision && s.hoverVy > 0.0D) s.hoverVy = 0.0D;
+
+        s.hoverVy += (target - s.hoverVy) * ZEPHYR_VERTICAL_EASE;
+        if (target == 0.0D && Math.abs(s.hoverVy) < 1.0E-3D) s.hoverVy = 0.0D;
+
+        player.setDeltaMovement(v.x, s.hoverVy, v.z);
     }
 
     private static void releaseToggledCrouch() {
@@ -190,11 +309,14 @@ public final class ClientHoverHandler {
         if (s.phase == phase) return;
         s.phase = phase;
         s.phaseTicks = 0;
+        HoverControlHelper.setActive(player, s.controlled ? phase : HoverPhase.NONE);
         if (phase == HoverPhase.NONE) {
+            s.controlled = false;
+            s.crouchLatched = false;
             HoverHelper.removeSlowFall(player);
         } else {
             HoverHelper.forceUpright(player);
-            if (phase == HoverPhase.HOVERING) HoverHelper.applySlowFall(player);
+            if (phase == HoverPhase.HOVERING && !s.controlled) HoverHelper.applySlowFall(player);
         }
         if (serverHasMod()) {
             IcarusAdditionsNetwork.CHANNEL.sendToServer(new HoverStateC2SPacket(phase));
@@ -244,6 +366,31 @@ public final class ClientHoverHandler {
         if (!(entity instanceof Player player)) return false;
         HoverState s = STATES.get(player);
         return s != null && s.phase == HoverPhase.HOVERING;
+    }
+
+    /** True while the player is in a Zephyr (controllable) hover. Local player only (others: use isHovering). */
+    public static boolean isControlledHover(Entity entity) {
+        return entity instanceof Player player && HoverControlHelper.isActive(player);
+    }
+
+    /**
+     * How a braking/hovering player moved over the last tick, relative to the way they face (see HoverMovement).
+     * Cached at the end of each player tick, so it's valid whenever you call it (render, Epic Fight motion
+     * updates, ...). Works for the local player and other players. ZERO when not hovering.
+     */
+    public static HoverMovement getHoverMovement(Entity entity) {
+        if (!(entity instanceof Player player)) return HoverMovement.ZERO;
+        HoverState s = STATES.get(player);
+        return s == null || s.phase == HoverPhase.NONE ? HoverMovement.ZERO : s.movement;
+    }
+
+    /**
+     * Main direction a hovering player is moving: FORWARD / BACKWARD / LEFT / RIGHT / UP / DOWN, NONE when still or
+     * not hovering. Facing-relative, so with a decoupled camera "running at the camera" reports FORWARD.
+     * Use getHoverMovement(entity).horizontalDirection() / verticalDirection() if you need both at once.
+     */
+    public static HoverMoveDirection getHoverMoveDirection(Entity entity) {
+        return getHoverMovement(entity).dominant();
     }
 
     public static boolean isBreaking(Entity entity){

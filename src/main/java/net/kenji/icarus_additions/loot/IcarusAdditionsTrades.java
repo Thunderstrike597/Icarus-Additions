@@ -18,10 +18,13 @@ public final class IcarusAdditionsTrades {
     @SubscribeEvent
     public static void onVillagerTrades(VillagerTradesEvent event) {
         if (event.getType() != VillagerProfession.LIBRARIAN) return;
-        // Level 5 = Master. One listing that picks Updraft or Tempest at random.
+        // Level 5 = Master. One listing that picks Updraft, Tempest or Zephyr at random.
         event.getTrades().get(5).add((trader, random) -> {
-            Enchantment ench = random.nextBoolean() ? IcarusAdditionsEnchantments.UPDRAFT.get()
-                                                    : IcarusAdditionsEnchantments.TEMPEST.get();
+            Enchantment ench = switch (random.nextInt(3)) {
+                case 0 -> IcarusAdditionsEnchantments.UPDRAFT.get();
+                case 1 -> IcarusAdditionsEnchantments.TEMPEST.get();
+                default -> IcarusAdditionsEnchantments.ZEPHYR.get();
+            };
             int level = 1 + random.nextInt(3);
             return new MerchantOffer(
                     new ItemStack(Items.EMERALD, 20 + level * 12 + random.nextInt(10)), // ~32–66 emeralds

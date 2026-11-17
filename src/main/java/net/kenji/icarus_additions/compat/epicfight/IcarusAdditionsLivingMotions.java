@@ -5,7 +5,10 @@ import yesman.epicfight.api.animation.LivingMotion;
 public enum IcarusAdditionsLivingMotions implements LivingMotion {
     AIR_BREAK,
     UPDRAFT_CHARGED,
-    UPDRAFT;
+    UPDRAFT,
+    ZEPHYR_FORWARD,
+    ZEPHYR_BACKWARD,
+    ZEPHYR_DOWN;
 
     final int id;
 

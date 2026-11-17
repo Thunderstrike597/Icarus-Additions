@@ -3,6 +3,7 @@ package net.kenji.icarus_additions.mixin;
 import net.kenji.icarus_additions.client.ClientHoverHandler;
 import net.kenji.icarus_additions.client.ClientUpdraftHandler;
 import net.kenji.icarus_additions.compat.epicfight.IcarusAdditionsLivingMotions;
+import net.kenji.icarus_additions.mechanisms.hover.HoverMoveDirection;
 import net.kenji.icarus_additions.mechanisms.updraft.UpdraftPhase;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.world.InteractionHand;
@@ -36,14 +37,28 @@ public class AbstractClientPlayerPatchMixin {
 
             LivingMotion breakingMotion = IcarusAdditionsLivingMotions.AIR_BREAK;
             LivingMotion updraftChargedMotion = IcarusAdditionsLivingMotions.UPDRAFT_CHARGED;
-
             LivingMotion hoveringMotion = LivingMotions.CREATIVE_IDLE;
+            HoverMoveDirection moveDirection = ClientHoverHandler.getHoverMoveDirection(player);
+            LivingMotion moveDirectionMotion = null;
+
+            moveDirectionMotion = switch (moveDirection){
+                case NONE -> null;
+                case FORWARD -> IcarusAdditionsLivingMotions.ZEPHYR_FORWARD;
+                case BACKWARD -> IcarusAdditionsLivingMotions.ZEPHYR_BACKWARD;
+                case LEFT -> IcarusAdditionsLivingMotions.ZEPHYR_FORWARD;
+                case RIGHT -> IcarusAdditionsLivingMotions.ZEPHYR_FORWARD;
+                case UP -> LivingMotions.CREATIVE_IDLE;
+                case DOWN -> IcarusAdditionsLivingMotions.ZEPHYR_DOWN;
+            };
 
 
-            if(!isHovering && !isBreaking && !isUpdraftCharged)return;
+            if(!isHovering && !isBreaking && !isUpdraftCharged && moveDirectionMotion == null) return;
 
-            if(isHovering)
-                self.currentLivingMotion = hoveringMotion;
+            if(isHovering){
+                if(moveDirectionMotion == null)
+                    self.currentLivingMotion = hoveringMotion;
+                else self.currentLivingMotion = moveDirectionMotion;
+            }
             if(isBreaking)
                 self.currentLivingMotion = breakingMotion;
             if(isUpdraftCharged)

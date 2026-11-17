@@ -2,5 +2,7 @@
   "enchantment.icarus_additions.updraft": "Updraft",
   "enchantment.icarus_additions.updraft.desc": "Crouch still to spread your wings, then jump to be lifted high into the air and straight into flight. Higher levels lift you further.",
   "enchantment.icarus_additions.tempest": "Tempest",
-  "enchantment.icarus_additions.tempest.desc": "While flying, press sprint to spin dash forward like Riptide, then keep flying. Higher levels dash further."
+  "enchantment.icarus_additions.tempest.desc": "While flying, press sprint to spin dash forward like Riptide, then keep flying. Higher levels dash further.",
+  "enchantment.icarus_additions.zephyr": "Zephyr",
+  "enchantment.icarus_additions.zephyr.desc": "Press crouch while flying to stop and hover in place, then move freely: jump to rise, crouch to sink. Double-tap crouch or land to leave the hover. Higher levels move faster."
 }

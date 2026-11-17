@@ -22,6 +22,7 @@ public final class ConfigClient {
     public static final ForgeConfigSpec.DoubleValue HOVER_WING_LIFT;
     public static final ForgeConfigSpec.DoubleValue HOVER_POP_HEIGHT;
     public static final ForgeConfigSpec.BooleanValue CAMERA_FOLLOWS_HOVER_POP;
+    public static final ForgeConfigSpec.IntValue HOVER_DOUBLE_TAP_WINDOW_MS;
 
     static {
         ForgeConfigSpec.Builder b = new ForgeConfigSpec.Builder();
@@ -104,6 +105,11 @@ public final class ConfigClient {
                         "false = the third person camera stays put and you see the player bob upward on screen.",
                         "true = the camera moves up with the player.")
                 .define("cameraFollowsPop", false);
+
+        HOVER_DOUBLE_TAP_WINDOW_MS = b.comment(
+                        "Zephyr hover only: the most time (milliseconds) allowed between the two crouch presses of the",
+                        "double-tap that leaves the hover. Lower = needs a faster double-tap.")
+                .defineInRange("doubleTapExitWindowMs", 300, 50, 1500);
 
         b.pop();
         SPEC = b.build();
