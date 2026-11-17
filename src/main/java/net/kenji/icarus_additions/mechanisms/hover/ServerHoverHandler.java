@@ -62,8 +62,19 @@ public final class ServerHoverHandler {
         boolean controlled = HoverControlHelper.canControl(player);
         HoverControlHelper.setActive(player, controlled ? phase : HoverPhase.NONE);
 
-        // Fail-safes, in case the client's NONE packet is late or never comes
-        if (!HoverHelper.canHover(player) || player.isFallFlying() || (!controlled && !player.isShiftKeyDown())) {
+        if (controlled) {
+            // The client owns a Zephyr hover and ends it itself (double-tap / landing). The server's own onGround can
+            // disagree for a tick near the ground; ending the hover here on that would let a jump start wing flight
+            // on the server (Caelus' flight packet), which then syncs back and throws the client out of its hover.
+            if (!HoverHelper.canHoverIgnoringGround(player)) {
+                setPhase(player, HoverPhase.NONE);
+                return;
+            }
+            if (player.isFallFlying()) {
+                player.stopFallFlying();
+            }
+        } else if (!HoverHelper.canHover(player) || player.isFallFlying() || !player.isShiftKeyDown()) {
+            // Fail-safes, in case the client's NONE packet is late or never comes
             setPhase(player, HoverPhase.NONE);
             return;
         }

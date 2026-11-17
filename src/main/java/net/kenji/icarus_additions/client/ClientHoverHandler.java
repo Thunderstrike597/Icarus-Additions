@@ -25,6 +25,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.InputEvent;
+import net.minecraftforge.client.event.MovementInputUpdateEvent;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.living.LivingEvent;
 import net.minecraftforge.event.entity.player.PlayerFlyableFallEvent;
@@ -94,6 +95,8 @@ public final class ClientHoverHandler {
         boolean crouchLatched;
         /** Zephyr: vertical speed we carry ourselves (eased toward the jump/crouch target). */
         double hoverVy;
+        /** Zephyr, toggle-crouch mode: sinking switched on/off by crouch presses (our own state, not vanilla's). */
+        boolean descendToggled;
         /** Movement over the last full tick, cached at the END of the player tick (after the move happened). */
         HoverMovement movement = HoverMovement.ZERO;
     }
@@ -154,6 +157,39 @@ public final class ClientHoverHandler {
         lastCrouchPressMs = -1L;
     }
 
+    /**
+     * Zephyr: keep the vanilla crouch state out of it. During a Zephyr hover the crouch key only drives our own
+     * "sink" input, so the player never actually sneaks: no sneak pose/slowdown, no sneak sent to the server, and
+     * other players see them standing. Fires right after vanilla reads the keys in LocalPlayer.aiStep.
+     */
+    @SubscribeEvent
+    public static void onMovementInput(MovementInputUpdateEvent event) {
+        if (event.getEntity() == Minecraft.getInstance().player && HoverControlHelper.isActive(event.getEntity())) {
+            event.getInput().shiftKeyDown = false;
+        }
+    }
+
+    /**
+     * Whether the crouch key is physically held right now. Not keyShift.isDown(): with toggle-crouch that's the
+     * toggled state, and isShiftKeyDown() is forced false during a Zephyr hover (see onMovementInput).
+     */
+    private static boolean isCrouchKeyHeld() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.screen != null) return false;
+        InputConstants.Key key = mc.options.keyShift.getKey();
+        if (key == InputConstants.UNKNOWN) return false;
+        long window = mc.getWindow().getWindow();
+        return switch (key.getType()) {
+            case KEYSYM -> InputConstants.isKeyDown(window, key.getValue());
+            case MOUSE -> GLFW.glfwGetMouseButton(window, key.getValue()) == GLFW.GLFW_PRESS;
+            default -> false;
+        };
+    }
+
+    private static boolean isToggleCrouch() {
+        return Minecraft.getInstance().options.toggleCrouch().get();
+    }
+
     /** Zephyr hover available for the local player right now. Needs the mod on the server (it prevents the fly-kick). */
     private static boolean canControlHover(LocalPlayer player) {
         return serverHasMod() && HoverControlHelper.canControl(player);
@@ -180,6 +216,7 @@ public final class ClientHoverHandler {
         HoverState s = STATES.computeIfAbsent(player, p -> new HoverState());
         boolean enabled = ConfigClient.HOVER_ENABLED.get();
         boolean crouching = player.isShiftKeyDown();
+        boolean crouchHeld = isCrouchKeyHeld();
         boolean controllable = canControlHover(player);
 
         boolean crouchPressed = crouchPressPending;
@@ -191,7 +228,7 @@ public final class ClientHoverHandler {
         if (s.blockUntilUncrouch && !crouching) {
             s.blockUntilUncrouch = false;
         }
-        if (s.crouchLatched && !crouching) {
+        if (s.crouchLatched && !crouchHeld) {
             s.crouchLatched = false;
         }
 
@@ -212,12 +249,18 @@ public final class ClientHoverHandler {
                 if (controllable) {
                     // Back to standing: toggle-crouch is switched off, a held crouch is ignored until it's let go
                     s.crouchLatched = true;
+                    s.descendToggled = false;
                     releaseToggledCrouch();
                     resetDoubleTap();
                 }
                 if (player.isFallFlying()) player.stopFallFlying();
                 setLocalPhase(player, s, HoverPhase.BRAKING);
             }
+        } else if (s.controlled && player.isFallFlying()) {
+            // Zephyr: jump is "rise", never "take off". startFallFlying is blocked during the hover, but if flight
+            // still got switched on (e.g. the server's copy of the flag), switch it straight back off and keep hovering.
+            player.stopFallFlying();
+            tickHoverBody(player, s, crouchPressed, crouchHeld);
         } else if (player.isFallFlying()) {
             // (3) Jumped out of the hover into flight: end it, and don't let a still-held/toggled crouch re-trigger it
             // (Zephyr hovers block flight starts, so this is the normal hover only, or something external)
@@ -233,29 +276,41 @@ public final class ClientHoverHandler {
                 releaseToggledCrouch(); // the 2nd tap may have toggled crouch on; don't drop out of the sky crouching
             }
         } else {
-            s.phaseTicks++;
-            HoverHelper.forceUpright(player);
-            player.resetFallDistance();
-
-            Vec3 v = player.getDeltaMovement();
-            if (s.phase == HoverPhase.BRAKING) {
-                double speed = brake(player, s, v, ConfigClient.HOVER_SLOW_DOWN_INTENSITY.get());
-                if (speed < STOPPED_SPEED || s.phaseTicks >= MAX_BRAKE_TICKS) {
-                    s.hoverVy = s.carryY;
-                    setLocalPhase(player, s, HoverPhase.HOVERING);
-                }
-
-            } else if (s.controlled) {
-                tickControlledHover(player, s, crouching, v);
-            } else {
-                player.setDeltaMovement(v.x * HOVER_DRIFT_DAMP, v.y, v.z * HOVER_DRIFT_DAMP);
-                // Applied locally too, so the physics kick in this tick instead of after a server round trip
-                // (and so it still works on servers without the mod)
-                HoverHelper.applySlowFall(player);
-            }
+            tickHoverBody(player, s, crouchPressed, crouchHeld);
         }
 
         s.wasIcarusFlying = player.isFallFlying() && IcarusHelper.hasWings(player);
+    }
+
+    /** One tick of an ongoing hover (braking or hovering). */
+    private static void tickHoverBody(LocalPlayer player, HoverState s, boolean crouchPressed, boolean crouchHeld) {
+        s.phaseTicks++;
+        HoverHelper.forceUpright(player);
+        player.resetFallDistance();
+
+        if (s.controlled && isToggleCrouch()) {
+            // Our own toggle replaces vanilla's: flip it per press, and keep vanilla's toggle off so the player
+            // isn't left crouching when the hover ends
+            if (crouchPressed) s.descendToggled = !s.descendToggled;
+            releaseToggledCrouch();
+        }
+
+        Vec3 v = player.getDeltaMovement();
+        if (s.phase == HoverPhase.BRAKING) {
+            double speed = brake(player, s, v, ConfigClient.HOVER_SLOW_DOWN_INTENSITY.get());
+            if (speed < STOPPED_SPEED || s.phaseTicks >= MAX_BRAKE_TICKS) {
+                s.hoverVy = s.carryY;
+                setLocalPhase(player, s, HoverPhase.HOVERING);
+            }
+
+        } else if (s.controlled) {
+            tickControlledHover(player, s, crouchHeld, v);
+        } else {
+            player.setDeltaMovement(v.x * HOVER_DRIFT_DAMP, v.y, v.z * HOVER_DRIFT_DAMP);
+            // Applied locally too, so the physics kick in this tick instead of after a server round trip
+            // (and so it still works on servers without the mod)
+            HoverHelper.applySlowFall(player);
+        }
     }
 
     /**
@@ -264,10 +319,11 @@ public final class ClientHoverHandler {
      * Vertical: written at the end of the tick, so it's exactly how far the player moves next tick (gravity and
      * drag are applied after the move and overwritten here again).
      */
-    private static void tickControlledHover(LocalPlayer player, HoverState s, boolean crouching, Vec3 v) {
+    private static void tickControlledHover(LocalPlayer player, HoverState s, boolean crouchHeld, Vec3 v) {
         double speed = HoverControlHelper.getVerticalSpeed(HoverControlHelper.getLevel(player));
         boolean up = player.input.jumping;
-        boolean down = crouching && !s.crouchLatched;
+        // Follows the vanilla crouch setting: toggle-crouch = press to start/stop sinking, hold = sink while held
+        boolean down = isToggleCrouch() ? s.descendToggled : crouchHeld && !s.crouchLatched;
         double target = up == down ? 0.0D : (up ? speed : -speed);
 
         // Bumped a ceiling: don't keep pushing into it
@@ -313,6 +369,7 @@ public final class ClientHoverHandler {
         if (phase == HoverPhase.NONE) {
             s.controlled = false;
             s.crouchLatched = false;
+            s.descendToggled = false;
             HoverHelper.removeSlowFall(player);
         } else {
             HoverHelper.forceUpright(player);

@@ -25,6 +25,19 @@ public final class HoverHelper {
                 && canStandUpright(player);
     }
 
+    /**
+     * canHover without the ground check, for the server's side of a Zephyr hover: the client decides when it has
+     * landed, the server only drops the hover for things that clearly end it.
+     */
+    public static boolean canHoverIgnoringGround(Player player) {
+        return !player.isInWater()
+                && !player.isInLava()
+                && !player.isPassenger()
+                && !player.getAbilities().flying
+                && !player.isSpectator()
+                && IcarusHelper.hasWings(player);
+    }
+
     /** Hover forces the standing pose; don't do it if that would shove the player into blocks (tight tunnels). */
     public static boolean canStandUpright(Player player) {
         return player.level().noCollision(player,
