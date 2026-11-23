@@ -29,3 +29,10 @@ description='''${mod_description}'''
     versionRange="[0,)"
     ordering="AFTER"
     side="BOTH"
+
+[[dependencies.${mod_id}]]
+    modId="entity_model_features"
+    mandatory=false
+    versionRange="[2.0,)"
+    ordering="AFTER"
+    side="CLIENT"

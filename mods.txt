@@ -26,3 +26,4 @@ packet-fixer-689467
 just-enough-resources-jer-240630
 implementation icarus-428151
 implementation configured-457570
+implementation distant-horizons-508933

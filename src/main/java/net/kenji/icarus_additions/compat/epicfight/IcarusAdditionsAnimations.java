@@ -38,7 +38,7 @@ public class IcarusAdditionsAnimations {
                                 if (level > 0 && lengthSeconds > 0.0F) {
                                     double height = UpdraftHelper.getLiftHeight(level);
                                     double speedMult = ConfigServer.ASCENT_SPEED_MULTIPLIER.get();
-                                    float launchSeconds = ClientUpdraftHandler.estimateAscentTicks(height, speedMult) / 20.0F;
+                                    float launchSeconds = ClientUpdraftHandler.estimateLaunchTicks(height, speedMult) / 20.0F; // wind-up + ascent
 
                                     // The blend-in above plays at normal speed for its 0.1s, so the animation itself gets the rest
                                     float targetSeconds = Math.max(0.1F, launchSeconds - 0.1F);

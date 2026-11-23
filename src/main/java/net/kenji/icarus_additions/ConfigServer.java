@@ -17,6 +17,7 @@ public final class ConfigServer {
     public static final ForgeConfigSpec.DoubleValue CHARGE_SECONDS_LEVEL_MULTIPLIER;
 
     public static final ForgeConfigSpec.DoubleValue ASCENT_SPEED_MULTIPLIER;
+    public static final ForgeConfigSpec.IntValue LAUNCH_DELAY_TICKS;
     public static final ForgeConfigSpec.BooleanValue PARTICLES;
 
     public static final ForgeConfigSpec.BooleanValue TEMPEST_ENABLED;
@@ -51,8 +52,16 @@ public final class ConfigServer {
                         "With the defaults (4.5 blocks / 1.35): I = 3.3s, II = 2.4s, III = 1.82 seconds.")
                 .defineInRange("chargeSecondsLevelMultiplier", 1.75, 1.0, 10.0);
 
-        ASCENT_SPEED_MULTIPLIER = b.comment("How fast the player is lifted. 1.0 = default, 2.0 = twice as fast.")
+        ASCENT_SPEED_MULTIPLIER = b.comment(
+                        "Launch speed: how fast the player leaves the ground (1.0 = 1.4 blocks/tick, 2.0 = twice that).",
+                        "The lift then slows down the whole way up, like a jump against gravity, and always stops at the",
+                        "enchantment's lift height. Higher = a punchier launch and a shorter climb.")
                 .defineInRange("ascentSpeedMultiplier", 1.0, 0.1, 5.0);
+
+        LAUNCH_DELAY_TICKS = b.comment(
+                        "Ticks between pressing jump and actually leaving the ground, so the lift lines up with the wings'",
+                        "downstroke (the heavy flap lasts 10 ticks; the downstroke is roughly ticks 2-5). 0 = instant.")
+                .defineInRange("launchDelayTicks", 4, 0, 10);
 
         PARTICLES = b.comment("Upward draft particles around the player while charged, and a burst on launch.")
                 .define("particles", true);

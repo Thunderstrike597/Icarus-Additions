@@ -1,6 +1,7 @@
 package net.kenji.icarus_additions;
 
 import com.mojang.logging.LogUtils;
+import net.kenji.icarus_additions.compat.emf.EMFCompat;
 import net.kenji.icarus_additions.compat.epicfight.EpicFightCompat;
 import net.kenji.icarus_additions.network.IcarusAdditionsNetwork;
 import net.kenji.icarus_additions.enchantment.IcarusAdditionsEnchantments;
@@ -10,6 +11,7 @@ import net.minecraftforge.fml.ModLoadingContext;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.config.ModConfig;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+import net.minecraftforge.fml.loading.FMLEnvironment;
 import net.minecraftforge.fml.loading.FMLLoader;
 import net.minecraftforge.network.NetworkConstants;
 import org.slf4j.Logger;
@@ -24,6 +26,7 @@ public class IcarusAdditions {
     }
 
     public static boolean EFM_LOADED = IcarusAdditions.isLoaded("epicfight");
+    public static boolean EMF_LOADED = IcarusAdditions.isLoaded("entity_model_features");
 
 
     public IcarusAdditions() {
@@ -42,6 +45,11 @@ public class IcarusAdditions {
         if (EFM_LOADED) {
             // All Epic Fight references live in the compat package, so nothing here loads them without Epic Fight
             EpicFightCompat.init(modEventBus);
+        }
+        if (EMF_LOADED && FMLEnvironment.dist.isClient()) {
+            // Registered in the constructor (not client setup) so the variables exist before EMF parses any
+            // model on the first resource reload; otherwise EMF logs "variable not found" and treats them as 0.
+            EMFCompat.init();
         }
 
     }

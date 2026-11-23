@@ -34,7 +34,7 @@ public final class ServerUpdraftHandler {
     /** Squared horizontal blocks per tick still counted as "standing still". */
     private static final double STILL_EPSILON_SQR = 1.0E-4D;
     /** Give up on a launch that never turned into flight. */
-    private static final int MAX_LAUNCH_TICKS = 200;
+    private static final int MAX_LAUNCH_TICKS = 500;
 
     private static final class State {
         UpdraftPhase phase = UpdraftPhase.NONE;
@@ -87,7 +87,11 @@ public final class ServerUpdraftHandler {
                 s.phaseTicks++;
                 player.resetFallDistance();
                 HoverHelper.forceUpright(player); // crouch may still be held while rising
-                boolean landed = player.onGround() && s.phaseTicks > 5;
+                int delay = ConfigServer.LAUNCH_DELAY_TICKS.get();
+                // Burst on the downstroke, when the client actually leaves the ground
+                if (delay > 0 && s.phaseTicks == delay && ConfigServer.PARTICLES.get()) spawnLaunchBurst(player);
+                // Still on the ground during the wind-up, so don't count that as having landed
+                boolean landed = player.onGround() && s.phaseTicks > 5 + delay;
                 if (player.isFallFlying() || landed || player.isInWater() || s.phaseTicks > MAX_LAUNCH_TICKS) {
                     setPhase(player, s, UpdraftPhase.NONE);
                 }
@@ -106,7 +110,7 @@ public final class ServerUpdraftHandler {
         }
         setPhase(player, s, UpdraftPhase.LAUNCHING);
         player.resetFallDistance();
-        if (ConfigServer.PARTICLES.get()) spawnLaunchBurst(player);
+        if (ConfigServer.LAUNCH_DELAY_TICKS.get() == 0 && ConfigServer.PARTICLES.get()) spawnLaunchBurst(player);
     }
 
     /** Client reached the top of the launch: start wing flight server-side, the same way Caelus' own packet does. */
